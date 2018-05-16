@@ -1,0 +1,678 @@
+if(false) {
+        FILE *fp = NULL;
+        fp = fopen("/home/itai/workspaces/CLionProjects/softwareproject/notes1.txt", "r");
+        if (fp == NULL) {
+            printf("Error: File doesn't exist or cannot be opened\n");
+        }
+        if (fp != NULL) {
+            char buff[BUFF_SIZE];
+            while (fgets(buff, BUFF_SIZE - 1, fp)) {
+                command = praseLine(buff, game->mode, game->gameBoard);
+                gameplay(&mode, &cond, game, &command);
+            }
+            free(fp);
+        }
+    }
+
+
+/*
+ * SPMiniMaxNode.c
+ *
+ *  Created on: May 20, 2017
+ *      Author: nitzan
+ */
+#include "SPMiniMax.h"
+#include <time.h>
+#include <assert.h>
+//lvl 5 new scoring functionm, return inf on checkmate,
+//limit 10^6 nodes, 10 seconds
+//for top percentaile scan more, and implement hard limit
+//greedy scan, if high gain scan more node for board,rather then ewqually, not all same level
+//eg lvlA(currsnt-1+2, depgh+2) when score>95 percentile, calc that
+//points for checks, secondary sort by number of total moves availbable, and queen threatened?
+//increase level from 5 to 7 by selecting only moves with positive score-when looking at 2 level
+// (eg black and white play). put board and scoers in hash table?how much speed up?
+// 1. only look at the top half of the nodes each time-need better function
+//imp. function-add defends for each piece and see if eating is profitablbe
+//array for each piece which defends and which attacks it and see if they cancel out or the lower
+// one is on attack side's
+// 2. score with free space and threatend dunction-or do simpler with more nodes?
+//90000 chagne limit?
+//3. scan for more levels if score is larger
+//3. hashing-doesn't help
+bool checkbound(int i){
+    if(i>-1 && i<8)
+        return true;
+    return false;
+}
+bool checkcolor(SPChessGame *game, int i, int j){
+    if(checkbound(i) && checkbound(j)){
+        if(getcolor(game,i, j) == GREY){
+            return true;
+        }
+    }
+    return false;
+}
+#define ok(x,y,color) (checkbound(x) && checkbound(y) && getcolor(game,x,y)!=(color)
+
+void connectionlogic(int i,int j,PIECE type, int
+eating[SP_Chess_GAME_DIM][SP_Chess_GAME_DIM][maxdefenders], int color,SPChessGame* game){
+    int index;int temp;int val;
+    if(checkbound(i) && checkbound(j)){
+        if(getcolor(game,i,j)==-1*color){
+            index=0;
+            val=getpiecescore(type);
+            while(index < (maxdefenders)/2 && eating[i][j][index]!=-1) {
+                if(val<eating[i][j][index]){
+                    temp=eating[i][j][index];
+                    eating[i][j][index]=val;
+                    val=temp;
+                }
+                index++;
+            }
+            if(index<(maxdefenders)/2)
+                eating[i][j][index]=val;
+        }else if(getcolor(game,i,j)==color){
+            index=maxdefenders-1;
+            val=getpiecescore(type);
+            while(index > (maxdefenders-2)/2 && eating[i][j][index]!=1){
+                if(val>eating[i][j][index]){
+                    temp=eating[i][j][index];
+                    eating[i][j][index]=val;
+                    val=temp;
+                }
+                index--;
+            }
+            if(index>(maxdefenders-2)/2)
+                eating[i][j][index]=-val;
+        }
+    }
+}
+
+void update(int x,int y,int* checkmating, int* threatening, int* legalmoves, COLOR color,
+            SPChessGame* game){
+    if(checkbound(x) && checkbound(y)){
+        if(getcolor(game,x,y)==-1*color){
+            if(get_piece_type(game,x,y)==KING){
+                (*checkmating)++;
+            }
+            (*threatening)+=getpiecescore(get_piece_type(game,x,y));
+        };
+        (*legalmoves)++;
+    }
+}
+SPCommand get_computer_move(SPChessGame* game, int recursionDepth, COLOR player, char* promote){
+    if(recursionDepth==5){
+        SPCommand com;
+        int nodescounter=0;
+        clock_t start=clock();
+        //computePlayAlvl5(game,&com,INT_MIN,INT_MAX,recursionDepth,player,recursionDepth,
+        //                 &nodescounter, start);
+        computePlayAlvl5(game,&com,INT_MIN,INT_MAX,5,player,5,
+                         &nodescounter, start);
+        printf("Scanned %d nodes at %f seconds\n",
+               nodescounter, ((double)(clock()-start))/CLOCKS_PER_SEC);
+        //printf("number of colisson is %d\n", totalcolison);
+        //printf("Scanned %d nodes\n",nodescounter);
+        return com;
+    }
+    SPCommand com;
+    computePlayA(game,&com,INT_MIN,INT_MAX,recursionDepth,player,recursionDepth,promote);
+    if ((com.arg3 != 7 && com.arg3 != 0) ||(get_piece_type(game,com.arg,com.arg2) != PAWN)){
+        *promote = 'z';
+    }
+	return com;
+}
+
+int computePlayA(SPChessGame* game, SPCommand* BestMove,int alpha, int beta,
+                 int recursionDepth, COLOR player,int maxDepth, char* promote){
+    if (recursionDepth == 0){
+        return ScoringFunction(game,player);
+    }
+    int maxVal = INT_MIN;
+    int moves[64];
+    moves[0] = -1;
+    int i;
+    int j;
+    for (i = 0; i < 8; i++){
+        for (j = 0; j < 8; j++){
+            if (player == getcolor(game,i,j)){
+                int index = 0;
+                get_moves(game,i,j,moves);
+                while (moves[index] != -1){
+                    char captured = game->gameBoard[moves[index]/8][moves[index]%8];
+                    move_piece_c(game,i,j,moves[index]/8,moves[index]%8);
+                    int tmp;
+                    if (get_piece_type(game,moves[index]/8,moves[index]%8) ==
+                        PAWN && (moves[index]/8 == 7 || moves[index]/8 == 0)){
+                        tmp = promotePlayB(game,BestMove,alpha,beta,recursionDepth
+                                ,player,maxDepth,moves[index]/8,moves[index]%8,promote);
+                    }
+                    else {
+                        tmp = computePlayB(game,BestMove,alpha,beta,recursionDepth-1,player,maxDepth,promote);
+                    }
+                    undo_move_min_max(game,i,j,moves[index]/8,moves[index]%8,captured);
+                    if ( tmp > maxVal  || (tmp == INT_MIN && maxVal == INT_MIN)){
+                        maxVal = tmp;
+                        if (recursionDepth == maxDepth){
+                            BestMove->arg = i;
+                            BestMove->arg2 = j;
+                            BestMove->arg3 = moves[index]/8;
+                            BestMove->arg4 = moves[index]%8;
+                            BestMove->cmd = MOVE;
+                        }
+                        if (tmp > alpha){
+                            alpha = tmp;
+                        }
+                        if (alpha >= beta){
+                            return maxVal;
+                        }
+                    }
+                    index++;
+                }
+            }
+        }
+    }
+    return maxVal;
+}
+
+
+int promotePlayB(SPChessGame* game,SPCommand* BestMove,
+                 int alpha,int beta,int recursionDepth,COLOR player,int maxDepth,int i,int j, char* promote){
+    printf("we enter this function ok\n");
+    int maxVal = INT_MIN;
+    if (i == 7){
+        char promotions[5] = {'m','b','n','r','q'};
+        for (int k = 0; k < 5; k++){
+            game->gameBoard[i][j] = promotions[k];
+            int tmp = computePlayB(game,BestMove,alpha,beta,recursionDepth-1,player,maxDepth,promote);
+            if (tmp>maxVal){
+                maxVal = tmp;
+                if (recursionDepth == maxDepth){
+                    *promote =  promotions[k];
+                }
+            }
+            game->gameBoard[i][j] = 'm';
+        }
+    }
+    else {
+        char promotions[5] = {'M','B','N','R','Q'};
+        for (int k = 0; k < 5; k++){
+            game->gameBoard[i][j] = promotions[k];
+            int tmp = computePlayB(game,BestMove,alpha,beta,recursionDepth-1,player,maxDepth,promote);
+            if (tmp>maxVal){
+                maxVal = tmp;
+                if (recursionDepth == maxDepth){
+                    *promote =  promotions[k];
+                }
+            }
+            game->gameBoard[i][j] = 'M';
+        }
+    }
+
+    return maxVal;
+}
+
+int computePlayB(SPChessGame* game, SPCommand* BestMove, int alpha, int beta,
+                 int recursionDepth, COLOR player, int maxDepth,char* promote){
+    if (recursionDepth == 0){
+        return ScoringFunction(game,player);
+    }
+    int minVal = INT_MAX;
+    int moves[64];
+    moves[0] = -1;
+    int i;
+    int j;
+    for (i = 0; i < 8; i++){
+        for (j = 0; j < 8; j++){
+            if (player != getcolor(game,i,j) && GREY != getcolor(game,i,j)){
+                int index = 0;
+                get_moves(game,i,j,moves);
+                while (moves[index] != -1){
+                    char captured = game->gameBoard[moves[index]/8][moves[index]%8];
+                    move_piece_c(game,i,j,moves[index]/8,moves[index]%8);
+                    int tmp;
+                    if (get_piece_type(game,moves[index]/8,moves[index]%8) ==
+                        PAWN && (moves[index]/8 == 7 || moves[index]/8 == 0)){
+                        tmp = promotePlayA(game,BestMove,alpha,beta
+                                ,recursionDepth,player,maxDepth,moves[index]/8,moves[index]%8,promote);
+                    }
+                    else {
+                        tmp = computePlayA(game,BestMove,alpha,beta,recursionDepth-1,player,maxDepth,promote);
+                    }
+                    undo_move_min_max(game,i,j,moves[index]/8,moves[index]%8,captured);
+                    if ( minVal > tmp  || (tmp == INT_MAX && minVal == INT_MAX)){
+                        minVal = tmp;
+                        if (beta > minVal){
+                            beta = minVal;
+                        }
+                        if (alpha >= beta){
+                            return minVal;
+                        }
+                    }
+                    index++;
+                }
+            }
+        }
+    }
+    return minVal;
+}
+
+int promotePlayA(SPChessGame* game,SPCommand* BestMove,
+                 int alpha,int beta,int recursionDepth,COLOR player,int maxDepth,int i,int j,char* promote){
+    int minVal = INT_MAX;
+    if (i == 7){
+        char promotions[5] = {'m','b','n','r','q'};
+        for (int k = 0; k < 5; k++){
+            game->gameBoard[i][j] = promotions[k];
+            int tmp = computePlayB(game,BestMove,alpha,beta,recursionDepth-1,player,maxDepth,promote);
+            if (tmp<minVal){
+                minVal = tmp;
+            }
+            game->gameBoard[i][j] = 'm';
+        }
+    }
+    else {
+        char promotions[5] = {'M','B','N','R','Q'};
+        for (int k = 0; k < 5; k++){
+            game->gameBoard[i][j] = promotions[k];
+            int tmp = computePlayB(game,BestMove,alpha,beta,recursionDepth-1,player,maxDepth,promote);
+            if (tmp<minVal){
+                minVal = tmp;
+            }
+            game->gameBoard[i][j] = 'M';
+        }
+    }
+
+    return minVal;
+}
+
+void undo_move_min_max(SPChessGame* game,int i,int j,int x,int y,char captured){
+	game->gameBoard[i][j] = game->gameBoard[x][y];
+	game->gameBoard[x][y] = captured;
+}
+
+int ScoringFunction(SPChessGame* game, COLOR player){
+	int score = 0;
+    int i;
+    int j;
+	for (i = 0; i < 8; i++){
+		for (j = 0; j < 8; j++){
+			PIECE piece = get_piece_type(game,i,j);
+			int tmp;
+			switch(piece){
+			case(PAWN):
+					tmp = 1;
+					break;
+			case(KNIGHT):
+					tmp = 3;
+					break;
+			case(BISHOP):
+					tmp = 3;
+					break;
+			case(ROOK):
+					tmp = 5;
+					break;
+			case(QUEEN):
+					tmp = 9;
+					break;
+			case(KING):
+					tmp = 100;
+					break;
+			default:
+					tmp = 0;
+					break;
+			}
+			if (player == getcolor(game,i,j)){
+				score += tmp;
+			}
+			else {
+				score -= tmp;
+			}
+		}
+	}
+	return score;
+}
+
+int getpiecescore(PIECE piece){
+    switch(piece){
+        case(PAWN):
+            return 1;
+        case(KNIGHT):
+            return 3;
+        case(BISHOP):
+            return 3;
+        case(ROOK):
+            return 5;
+        case(QUEEN):
+            return 20;
+        case(KING):
+            return 100;
+        default:
+            return 0;
+    }
+    return 0;
+}
+double ScoringFunction_lvl5(SPChessGame* game, int player, int nodecounter){
+    if((nodecounter)%PRINTNUM==0)
+        printf("%d", nodecounter);
+    double score = 0;
+    int i;
+    int j;
+    int tmp;
+    float altscore=0;
+    //int eatings[SP_Chess_GAME_DIM][SP_Chess_GAME_DIM][maxdefenders];
+    for (i = 0; i < 8; i++){
+        for (j = 0; j < 8; j++){
+            //eatings[i][j][0]=-1;//store positiv ones in first half
+            //eatings[i][j][9]=1;
+            tmp = getpiecescore(get_piece_type(game,i,j));
+            if (player == getcolor(game,i,j)){
+                score += tmp;
+                //scoresqure(game,i,j,eatings);
+                //altscore+=get_moves_fast_wo_kingcheck(game,i,j)/(64.0);
+            }
+            else if(-1* player==getcolor(game,i,j)){
+                score -= tmp;
+                //altscore -=get_moves_fast_wo_kingcheck(game,i,j)/(64.0);
+            }
+        }
+    }
+            //compute which pieces are "grounded" and retuirn 100*piece val if there ins one sure good
+    // eat, start serach from queen down.
+    //altscore= (float)(altscore * 2.0);///damp;
+    //if(score!=0.0)
+    //    printf("%f %f\n",score,altscore);
+    //double allmoves1[allmovesmax][maxminarrlen];
+    //printf("%d %f\n", nodecounter, allmoves1[0][0]);
+    //printf("is %d", get_all_moves(game, player,allmoves, allmovesmax, 0));
+    //int allmovesindex=get_all_moves(game, player,allmoves1, allmovesmax, 0, nodecounter,1);
+    //score += get_moves_fast_wo_kingcheck(game)
+    return score+altscore;
+}
+
+double computePlayAlvl5(SPChessGame* game, SPCommand* BestMove,double alpha, double beta, int
+recursionDepth,
+                  int player,int maxDepth, int *nodecounter, int start){
+    if(*nodecounter%PRINTNUM==0)
+        printf("so far %d in %f seconds\n", *nodecounter,((double) (clock()-start))/CLOCKS_PER_SEC);
+    (*nodecounter)++;
+    if((*nodecounter)>nodestimeout){
+        return INT_MIN;
+    }
+    if (recursionDepth == 0){
+        return ScoringFunction_lvl5(game,player, *nodecounter);
+    }
+    double maxVal = INT_MIN;
+    double allmoves[allmovesmax][maxminarrlen];
+    //printf("node counter1 is %d\n",*nodecounter);
+    int allmovesindex=get_all_moves(game, player,allmoves, allmovesmax,0, *nodecounter,0);
+    if(allmovesindex==0)
+        return maxVal;
+    quicksort(allmoves,0,allmovesindex-1);
+    for(int index=allmovesindex-1;index>-1;index--){
+            char captured = move_piece_c(game, (int) allmoves[index][0], (int) allmoves[index][1],
+                                         ((int) allmoves[index][2]),
+                                         ((int) allmoves[index][3]));
+            double tmp = computePlayBlvl5(game, BestMove, alpha, beta, recursionDepth - 1,
+                                          player, maxDepth, nodecounter, start);
+            undo_move_min_max(game, (int) allmoves[index][0], (int) allmoves[index][1], ((int)
+                    allmoves[index][2]), ((int) allmoves[index][3]), captured);
+            if (tmp > maxVal || (tmp == INT_MIN && maxVal == INT_MIN)) {
+                maxVal = tmp;
+                if (recursionDepth == maxDepth) {
+                    BestMove->arg = (int) allmoves[index][0];
+                    BestMove->arg2 = (int) allmoves[index][1];
+                    BestMove->arg3 = ((int) allmoves[index][2]);
+                    BestMove->arg4 = ((int) allmoves[index][3]);
+                    BestMove->overriddenpiece = game->gameBoard[BestMove->arg3][BestMove->arg4];
+                }
+                if (tmp > alpha) {
+                    alpha = tmp;
+                }
+                if (alpha >= beta) {
+                    return maxVal;
+                }
+            }
+
+    }
+    return maxVal;
+}
+
+
+/*double scoresqure(SPChessGame *game, int x, int y, int
+eatings[SP_Chess_GAME_DIM][SP_Chess_GAME_DIM][maxdefenders]){
+    int legalmoves = 0;//number of free moves
+    COLOR color = getcolor(game,x,y);
+    int threatening=0;//sum of pices threatehnd
+    int checkmating=0;//num of different ways of check
+    int count=0;
+    bool iswhite = (getcolor(game,x,y)==WHITE)?true:false;
+    int dir=(iswhite==true)?1:-1;
+    int index;
+    if(get_piece_type(game,x,y) == PAWN){
+        connectionlogic(x+dir,y+1,PAWN);
+        connectionlogic(x+dir,y-1,PAWN);
+    }else if(get_piece_type(game,x,y) == KNIGHT){
+        for(int k=-2;k<3;k++){
+            if(k!=0){
+                connectionlogic(x+k,y+3-k,KNIGHT);
+                connectionlogic(x+k,y+k-3,KNIGHT);
+            }
+        }
+    }else if(get_piece_type(game,x,y) == ROOK || get_piece_type(game,x,y) == QUEEN ||
+             get_piece_type(game,x,y) == BISHOP){
+        //printf("x y:%d %d\n",x,y);
+        for(int dirx=-1;dirx<2;dirx++){
+            for(int diry=-1;diry<2;diry++){
+                if(dirx!=0 || diry!=0){
+                    if(abs(dirx)==abs(diry) && get_piece_type(game,x,y) != ROOK) {
+                        count = 1;
+                        //printf("testing: %d %d\n", x + count * dirx,y+count*diry);
+                        while (checkbound(x + count * dirx) && checkbound(y + count * diry) &&
+                               getcolor(game, x + count * dirx, y + count * diry) == GREY) {
+                            count++;
+                            legalmoves++;
+                        }
+                        connectionlogic(x+count*dirx,y+count*diry,get_piece_type(game,x,y));
+                        //update(x+count*dirx,y+count*diry,&checkmating,&threatening,&legalmoves,
+                        //       color,game);
+                    }if((abs(dirx)==0 || 0==abs(diry)) && get_piece_type(game,x,y) != BISHOP){
+                        count = 1;
+                        //printf("testing1: %d %d\n", x + count * dirx,y+count*diry);
+                        while (checkbound(x + count * dirx) && checkbound(y + count * diry) &&
+                               checkcolor(game, x + count * dirx, y + count * diry)) {
+                            count++;
+                            legalmoves++;
+                        }
+                        connectionlogic(x+count*dirx,y+count*diry,get_piece_type(game,x,y));
+                        //update(x+count*dirx,y+count*diry,&checkmating,&threatening,&legalmoves,
+                        //       color,game);
+                    }
+                }
+            }
+        }
+    }
+
+
+}*/
+
+double get_moves_fast_wo_kingcheck(SPChessGame *game, int x, int y){
+    int legalmoves = 0;//number of free moves
+    COLOR color = getcolor(game,x,y);
+    int threatening=0;//sum of pices threatehnd
+    int checkmating=0;//num of different ways of check
+    int count=0;
+    bool iswhite = (getcolor(game,x,y)==WHITE)?true:false;
+    int dir=(iswhite==true)?1:-1;
+    if(get_piece_type(game,x,y) == PAWN){
+        if(checkbound(x+dir) && checkbound(y+1) && getcolor(game,x+dir,y+1)==-1*color){
+            update(x+dir,y+1,&checkmating,&threatening,&legalmoves,color,game);
+            //threatening(x+dir,y+1,PAWN)
+        }
+        if(checkbound(x+dir) && checkbound(y-1) && getcolor(game,x+dir,y-1)==-1*color){
+            update(x+dir,y-1,&checkmating,&threatening,&legalmoves,color,game);
+            //threatening(x+dir,y-1,PAWN)
+        }
+    }else if(get_piece_type(game,x,y) == KNIGHT){
+        for(int k=-2;k<3;k++){
+            if(k!=0){
+                if(checkbound(x+k) && checkbound(y+3-k)){
+                    if(getcolor(game,x+k,y+3-k)!=color) {
+                        update(x + k, y + 3 - k, &checkmating, &threatening, &legalmoves, color,
+                               game);
+                    }
+                }
+                if(ok(x+k,y+k-3,color)))
+                    update(x+k,y+k-3,&checkmating,&threatening,&legalmoves,color,game);
+            }
+        }
+    }else if(get_piece_type(game,x,y) == ROOK || get_piece_type(game,x,y) == QUEEN ||
+            get_piece_type(game,x,y) == BISHOP){
+        //printf("x y:%d %d\n",x,y);
+        for(int dirx=-1;dirx<2;dirx++){
+            for(int diry=-1;diry<2;diry++){
+                if(dirx!=0 || diry!=0){
+                    if(abs(dirx)==abs(diry) && get_piece_type(game,x,y) != ROOK) {
+                        count = 1;
+                        //printf("testing: %d %d\n", x + count * dirx,y+count*diry);
+                        while (checkbound(x + count * dirx) && checkbound(y + count * diry) &&
+                               getcolor(game, x + count * dirx, y + count * diry) == GREY) {
+                            count++;
+                            legalmoves++;
+                        }
+                        update(x+count*dirx,y+count*diry,&checkmating,&threatening,&legalmoves,
+                               color,game);
+                    }if((abs(dirx)==0 || 0==abs(diry)) && get_piece_type(game,x,y) != BISHOP){
+                        count = 1;
+                        //printf("testing1: %d %d\n", x + count * dirx,y+count*diry);
+                        while (checkbound(x + count * dirx) && checkbound(y + count * diry) &&
+                            checkcolor(game, x + count * dirx, y + count * diry)) {
+                            count++;
+                            legalmoves++;
+                        }
+                        update(x+count*dirx,y+count*diry,&checkmating,&threatening,&legalmoves,
+                               color,game);
+                    }
+                }
+            }
+        }
+    }
+    float maxeating = getpiecescore(PAWN)*10+2*(getpiecescore(ROOK)+getpiecescore(BISHOP)
+                                              +getpiecescore(KNIGHT));
+    maxeating+=getpiecescore(KING)+getpiecescore(QUEEN);
+    //float valueadjust=100.0;
+    //return 0.2*(valueadjust/50.0*legalmoves)+0.6*(valueadjust/maxeating)*threatening+0.1*
+    //   (valueadjust/3.0)*checkmating;
+    return threatening/maxeating;
+}
+
+int get_all_moves(SPChessGame *game, int player, double allmoves[][maxminarrlen], int arrlen, int
+positiveonly, int nodecounter, int ignorescore){
+    int all_moves_index=0;
+    int index=0,i,j;
+    int moves[64];
+    //TODO recursive loop to ScoringFunctionlev5l!! create simple function to just get num of
+    //rewrite using rules rather than naive way, which is 20 times slower!!
+    for (i = 0; i < 8; i++){
+        for (j = 0; j < 8; j++){
+            if (player == getcolor(game,i,j)) {
+                index = 0;
+                get_moves(game,i,j,moves);
+                while (moves[index] != -1) {
+                    char captured = move_piece_c(game, i, j, moves[index] / 8, moves[index] % 8);
+                    double score = 0;
+                    if(ignorescore==0)
+                        score=ScoringFunction_lvl5(game, player, nodecounter);
+                    if (all_moves_index < arrlen && (positiveonly==0 || score>=0.0)) {
+                        allmoves[all_moves_index][0] = i;
+                        allmoves[all_moves_index][1] = j;
+                        allmoves[all_moves_index][2] = moves[index];
+                        allmoves[all_moves_index][3]= score;
+                        all_moves_index++;
+                    }
+                    undo_move_min_max(game, i, j, moves[index] / 8, moves[index] % 8, captured);
+                    index++;
+                }
+            }
+        }
+    }
+    return all_moves_index;
+}
+
+double computePlayBlvl5(SPChessGame* game, SPCommand* BestMove, double alpha, double beta, int
+recursionDepth, int player, int maxDepth, int *nodecounter, int start){
+    if(*nodecounter%PRINTNUM==0)
+        printf("so far %d in %f seconds\n", *nodecounter,((double) (clock()-start))/CLOCKS_PER_SEC);
+    (*nodecounter)++;
+    if((*nodecounter)>nodestimeout){
+        return INT_MAX;
+    }
+    if (recursionDepth == 0){
+        return ScoringFunction_lvl5(game,player,*nodecounter);
+    }
+    double minVal = INT_MAX;
+    double allmoves[allmovesmax][maxminarrlen];
+    int allmovesindex=get_all_moves(game, -1*player,allmoves, allmovesmax,0,*nodecounter,0);
+    if(allmovesindex==0)
+        return minVal;
+    //printf("node coutner is %d\n",*nodecounter);
+    quicksort(allmoves,0,allmovesindex-1);
+    for(int index=0;index<allmovesindex;index++){
+            char captured = move_piece_c(game, (int) allmoves[index][0], (int) allmoves[index][1],
+                                         ((int) allmoves[index][2]),
+                                         ((int) allmoves[index][3]));
+            double tmp = computePlayAlvl5(game, BestMove, alpha, beta, recursionDepth - 1, player,
+                                          maxDepth, nodecounter, start);
+            undo_move_min_max(game, (int) allmoves[index][0], (int) allmoves[index][1],
+                              ((int) allmoves[index][2]),
+                              ((int) allmoves[index][3]),
+                              captured);
+            if (minVal > tmp || (tmp == INT_MAX && minVal == INT_MAX)) {
+                minVal = tmp;
+                if (beta > minVal) {
+                    beta = minVal;
+                }
+                if (alpha >= beta) {
+                    return minVal;
+                }
+            }
+
+    }
+    return minVal;
+}
+
+void swap(double L[][maxminarrlen],int left, int right){
+    double temp[maxminarrlen];
+    for(int i=0;i<maxminarrlen;i++){
+        temp[i]=L[left][i];
+    }for(int i=0;i<maxminarrlen;i++) {
+        L[left][i] = L[right][i];
+        L[right][i] = temp[i];
+    }
+}
+
+int partition(double L[][maxminarrlen], int left, int right, bool greaterorder){
+    int pivot = left;
+    double p_val = L[pivot][3];
+    while (left < right) {
+        while (((L[left][3] <= p_val && greaterorder) || (!greaterorder && L[left][3] >= p_val))
+                && left<right)
+            left++;
+        while (((p_val < L[right][3] && greaterorder) || (!greaterorder && p_val> L[right][3])) &&
+                left<right)
+            right--;
+        if (left < right)
+            swap(L, left, right);
+    }
+    swap(L , left, right);
+    return right;
+}
+
+void quicksort(double L[][maxminarrlen], int start, int end){
+    if (start >= end)
+        return;
+    int splitPoint = partition(L, start, end, true);
+    quicksort(L, start, splitPoint - 1);
+    quicksort(L, splitPoint + 1, end);
+}

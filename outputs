@@ -1,0 +1,104 @@
+Specify game setting or type 'start' to begin a game with the current setting:
+
+*game_mode 245
+
+Wrong game mode
+
+*game_mode 1
+
+Game mode is set to 1 player
+
+*difficulty 245
+
+Wrong difficulty level. The value should be between 1 to 5
+
+*difficulty 2
+
+*user_color
+
+*load fdfbdsfd
+
+Error: File doesn’t exist or cannot be opened
+
+*print_setting
+
+SETTINGS:
+GAME_MODE: 1
+DIFFICULTY_LVL: 2
+USER_CLR: BLACK
+
+*start
+
+Computer: move knight at <1,B> to <3,A>
+8| R N B Q K B N R |
+7| M M M M M M M M |
+6| _ _ _ _ _ _ _ _ |
+5| _ _ _ _ _ _ _ _ |
+4| _ _ _ _ _ _ _ _ |
+3| n _ _ _ _ _ _ _ |
+2| m m m m m m m m |
+1| r _ b q k b n r |
+  -----------------
+   A B C D E F G H 
+black player - enter your move:
+
+*move <245,A> to <4,A>
+
+Invalid position on the board
+
+*move <4,A> to <5,A>
+
+The specified position does not contain your piece
+
+*move <7,A> to <2,A>
+
+Illegal move.
+
+*move <7,A> to <5,A>
+
+Computer: move rook at <1,A> to <1,B>
+8| R N B Q K B N R |
+7| _ M M M M M M M |
+6| _ _ _ _ _ _ _ _ |
+5| M _ _ _ _ _ _ _ |
+4| _ _ _ _ _ _ _ _ |
+3| n _ _ _ _ _ _ _ |
+2| m m m m m m m m |
+1| _ r b q k b n r |
+  -----------------
+   A B C D E F G H 
+black player - enter your move:
+
+*get_moves
+
+<5,B>*
+<6,B>
+
+*undo
+
+Undo move for player white : <1,A> -> <1,B>
+Undo move for player black : <7,A> -> <5,A>
+8| R N B Q K B N R |
+7| M M M M M M M M |
+6| _ _ _ _ _ _ _ _ |
+5| _ _ _ _ _ _ _ _ |
+4| _ _ _ _ _ _ _ _ |
+3| n _ _ _ _ _ _ _ |
+2| m m m m m m m m |
+1| r _ b q k b n r |
+  -----------------
+   A B C D E F G H 
+black player - enter your move:
+
+*undo
+
+Empty history, move cannot be undone
+
+*reset
+
+Restarting...
+Specify game setting or type 'start' to begin a game with the current setting:
+
+*quit
+
+Exiting...

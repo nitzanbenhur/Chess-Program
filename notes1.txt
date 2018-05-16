@@ -1,0 +1,6 @@
+difficulty 5
+start
+move <2,D> to <4,D>
+move <4,D> to <5,D>
+move <1,D> to <5,D>
+move <2,C> to <3,C>
